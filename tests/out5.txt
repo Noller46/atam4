@@ -1,0 +1,3 @@
+PRF:: symbol address is 0x40101B
+PRF:: run #1 called with (30):
+PRF::   call to function returned with 20
