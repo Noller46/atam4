@@ -223,11 +223,11 @@ void handle_enter(int *num_rec, int *num_non_rec, int pid, int num){
     //save instruction
     pair p;
     p.addr = ret_addr;
-    p.instruct = trace(PTRACE_PEEKTEXT, pid, (void*)ret_addr, (void*)0);
+    p.instruct = פtrace(PTRACE_PEEKTEXT, pid, (void*)ret_addr, (void*)0);
     push(&stack, p);
 
     //insert sigtrap to return
-    long insert_first = (first_instruct & 0xFFFFFFFFFFFFFF00) | 0xCC;
+    long insert_first = (p.instruct & 0xFFFFFFFFFFFFFF00) | 0xCC;
     ptrace(PTRACE_POKETEXT, pid, (void*)ret_addr, (void*)insert_first);
 
     //do first func inst
@@ -235,9 +235,11 @@ void handle_enter(int *num_rec, int *num_non_rec, int pid, int num){
     ptrace(PTRACE_POKETEXT, pid, (void*)regs.rip, (void*)first_instruct);
     ptrace(PTRACE_SETREGS, pid, (void*)0, &regs);
     ptrace(PTRACE_SINGLESTEP, pid, (void*)0, (void*)0);
+    waitpid(pid, NULL, 0);
 
     //intert sigtrap to func enter
-    ptrace(PTRACE_POKETEXT, pid, (void*)regs.rip, (void*)first_instruct);
+    long first_insert = (first_instruct & 0xFFFFFFFFFFFFFF00) | 0xCC;
+    ptrace(PTRACE_POKETEXT, pid, (void*)regs.rip, (void*)first_insert);
 }
 
 
