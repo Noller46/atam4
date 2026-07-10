@@ -159,10 +159,12 @@ pair pop(CallStack *stack){
     return p;
 }
 
+CallStack stack;
 long first_instruct;
-void handle_break(int *num_rec, int *num_non_rec, int pid, unsigned long addr);
-void handle_enter(int *num_rec, int *num_non_rec, int pid);
+void handle_break(int *num_rec, int *num_non_rec, int pid, unsigned long addr, int num); //done, not tested
+void handle_enter(int *num_rec, int *num_non_rec, int pid, int num); //done, not tested
 void handle_exit(int *num_rec, int pid);
+void print_enter(bool rec, struct user_regs_struct *regs, int *num_non_rec, int num); //done, not tested
 
 void run_tracer(pid_t child_pid, unsigned long addr, int nr_params)
 {
@@ -173,7 +175,7 @@ void run_tracer(pid_t child_pid, unsigned long addr, int nr_params)
     num_non_rec - a simple counter for non-recursive calls
     */
     struct user_regs_struct regs;
-
+    init(&stack);
     // TODO: Implement tracing logic
     wait(&wait_status);
     first_instruct = ptrace(PTRACE_PEEKTEXT, child_pid, (void*)addr, (void*)0);
@@ -186,7 +188,7 @@ void run_tracer(pid_t child_pid, unsigned long addr, int nr_params)
             return;
         if(WIFSTOPPED(wait_status)){
             if(WSTOPSIG(wait_status) == SIGTRAP){
-                handle_break(&num_rec, &num_non_rec, child_pid, addr);
+                handle_break(&num_rec, &num_non_rec, child_pid, addr, nr_params);
                 ptrace(PTRACE_CONT, child_pid, (void*)0, (void*)0);
             }
             else
@@ -197,13 +199,13 @@ void run_tracer(pid_t child_pid, unsigned long addr, int nr_params)
     }
 }
 
-void handle_break(int *num_rec, int *num_non_rec, int pid, unsigned long addr){
+void handle_break(int *num_rec, int *num_non_rec, int pid, unsigned long addr, int num){
     struct user_regs_struct regs;
     ptrace(PTRACE_GETREGS, pid, (void*)0, &regs);
     unsigned long curr_addr = regs.rip - 1;
     if(curr_addr == addr){
         //enter (the followed func was called)
-        handle_enter(num_rec, num_non_rec, pid);
+        handle_enter(num_rec, num_non_rec, pid, num);
     }
     else{
         //exit
@@ -211,8 +213,60 @@ void handle_break(int *num_rec, int *num_non_rec, int pid, unsigned long addr){
     }
 }
 
-void handle_enter(int *num_rec, int *num_non_rec, int pid){
-    
+void handle_enter(int *num_rec, int *num_non_rec, int pid, int num){
+    struct user_regs_struct regs;
+    ptrace(PTRACE_GETREGS, pid, NULL, &regs);
+    print_enter(*num_rec, &regs, num_non_rec, num);
+    (*num_rec)++;
+    long ret_addr = ptrace(PTRACE_PEEKDATA, pid, (void*)regs.rsp, (void*)0);
+
+    //save instruction
+    pair p;
+    p.addr = ret_addr;
+    p.instruct = trace(PTRACE_PEEKTEXT, pid, (void*)ret_addr, (void*)0);
+    push(&stack, p);
+
+    //insert sigtrap to return
+    long insert_first = (first_instruct & 0xFFFFFFFFFFFFFF00) | 0xCC;
+    ptrace(PTRACE_POKETEXT, pid, (void*)ret_addr, (void*)insert_first);
+
+    //do first func inst
+    regs.rip--;
+    ptrace(PTRACE_POKETEXT, pid, (void*)regs.rip, (void*)first_instruct);
+    ptrace(PTRACE_SETREGS, pid, (void*)0, &regs);
+    ptrace(PTRACE_SINGLESTEP, pid, (void*)0, (void*)0);
+
+    //intert sigtrap to func enter
+    ptrace(PTRACE_POKETEXT, pid, (void*)regs.rip, (void*)first_instruct);
+}
+
+
+
+void print_enter(bool rec, struct user_regs_struct *regs, int *num_non_rec, int num){
+    if(num == 0){
+        if(rec)
+            printf("PRF:: entered recursive call with ()\n");
+        else
+            printf("PRF:: run #%d called with ():\n", *num_non_rec);
+        return;
+    }
+    unsigned long int arr[6];
+    arr[0] = regs->rdi;
+    arr[1] = regs->rsi;
+    arr[2] = regs->rdx;
+    arr[3] = regs->rcx;
+    arr[4] = regs->r8;
+    arr[5] = regs->r9;
+
+    if(rec)
+        printf("PRF:: entered recursive call with (");
+    else
+        printf("PRF:: run #%d called with (", *num_non_rec);
+    for(int i = 0; i < num; i++){
+        if(i != 0) printf(", ");
+        printf("%llu", arr[i]);
+    }
+    printf(")\n");
 }
 
 int main(int argc, char* const argv[])
