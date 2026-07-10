@@ -82,7 +82,8 @@ unsigned long parse_elf(const char* target_sym, void* file_contents)
 {
     // TODO: Look up target_sym address in the elf binary and return its virtual
     // address. Return 0 if not found.
-
+    char* str = (char*)ptr;
+    fprintf(stderr, "Reached main: x = %d\n", x);
     return 0;
 }
 
