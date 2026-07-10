@@ -124,10 +124,52 @@ unsigned long parse_elf(const char* target_sym, void* file_contents)
 /*
  * Main debugger tracing loop.
  */
+
+typedef struct{
+    long addr;
+    long instruct;
+} pair;
+
+typedef struct node{
+    pair p;
+    struct node *next;
+} node;
+
+typedef struct{
+    node *first, *last;
+} CallStack;
+
+void init(CallStack *stack) {stack->first = NULL; stack->last = NULL;}
+bool isEmpty(CallStack *stack) {return stack->first == NULL;}
+void insert(CallStack *stack, pair p){
+    node *n = malloc(sizeof(node));
+    n->p = p;
+    n->next = NULL;
+    if(isEmpty(stack)) {
+        stack->first = n;
+        stack->last = n;
+        return;
+    }
+    stack->last->next = n;
+    stack->last = n;
+}
+pair remove(CallStack *stack){
+    if(isEmpty(stack)){
+        pair p = {-1};
+        return p;
+    }
+    node *temp = stack->first;
+    stack->first = temp->next;
+    if(isEmpty) stack->last = NULL;
+    pair p = temp->p;
+    free(temp);
+    return p;
+}
+
 long first_instruct;
 void handle_break(int *num_rec, int *num_non_rec, int pid);
-void handle_rec(int *num_rec, int pid);
-void handle_non_rec(int *num_non_recm, int pid);
+void handle_enter(int *num_rec, int *num_non_rec, int pid);
+void handle_exit(int pid);
 
 void run_tracer(pid_t child_pid, unsigned long addr, int nr_params)
 {
@@ -161,6 +203,8 @@ void run_tracer(pid_t child_pid, unsigned long addr, int nr_params)
             ptrace(PTRACE_CONT, child_pid, NULL, NULL);
     }
 }
+
+
 
 int main(int argc, char* const argv[])
 {
