@@ -14,6 +14,7 @@
 #include <sys/wait.h>
 #include <syscall.h>
 #include <unistd.h>
+#include <signal.h>
 
 /*
  * Fork a child process and set it up for tracing.
@@ -80,7 +81,7 @@ void* get_elf_content(const char* sym_name, const char* file_name)
 
 unsigned long parse_elf(const char* target_sym, void* file_contents)
 {
-    // TODO: Look up target_sym address in the elf binary and return its virtual
+    // DONE: Look up target_sym address in the elf binary and return its virtual
     // address. Return 0 if not found.
 
     Elf64_Ehdr* ehdr = (Elf64_Ehdr*)file_contents;
@@ -105,10 +106,11 @@ unsigned long parse_elf(const char* target_sym, void* file_contents)
                 Elf64_Sym* sym = &symtab[j];
 
                 if (strcmp(strtab + sym->st_name, target_sym) == 0) {
-                    printf("PRF:: symbol address is 0x%lx\n", sym->st_value);
+                    printf("PRF:: symbol address is 0x%lx\n", sym->st_value); //part 1 print
                     unsigned char *f_comm = 
-                        ((char*)(ehdr) + sections[sym->st_shndx].sh_offset + sym->st_value - sections[sym->st_value].sh_addr);
-                    if(*f_comm == 0x55) 
+                        ((unsigned char*)(ehdr) + sections[sym->st_shndx].sh_offset 
+                        + sym->st_value - sections[sym->st_shndx].sh_addr);
+                    if(*f_comm == 0x55) //part 2 print
                         printf("PRF:: This function starts by pushing rbp\n");
                     return sym->st_value;
                 }
@@ -116,20 +118,48 @@ unsigned long parse_elf(const char* target_sym, void* file_contents)
         }
     }
     printf("PRF:: symbol not found\n");
-    return -1;
+    return 0;
 }
 
 /*
  * Main debugger tracing loop.
  */
+long first_instruct;
+void handle_break(int *num_rec, int *num_non_rec, int pid);
+void handle_rec(int *num_rec, int pid);
+void handle_non_rec(int *num_non_recm, int pid);
+
 void run_tracer(pid_t child_pid, unsigned long addr, int nr_params)
 {
-    int wait_status;
+    int wait_status, num_rec, num_non_rec;
+    /*
+    num_rec represents rcursive depth. for values > 0, num of recursive
+    calls is (num_rec-1). there's also the first, nonrecursive call
+    num_non_rec - a simple counter for non-recursive calls
+    */
     struct user_regs_struct regs;
 
-    wait(&wait_status);
-
     // TODO: Implement tracing logic
+    wait(&wait_status);
+    first_instruct = ptrace(PTRACE_PEEKTEXT, child_pid, addr, NULL);
+    long insert_first = (first_instruct & 0xFFFFFFFFFFFFFF00) | 0xCC;
+    ptrace(PTRACE_POKETEXT, child_pid, addr, insert_first);
+
+    while(1){
+        wait(&wait_status);
+        if(WIFEXITED(wait_status) || WIFSIGNALED(wait_status))
+            return;
+        if(WIFSTOPPED(wait_status)){
+            if(WSTOPSIG(wait_status) == SIGTRAP){
+                handle_break(num_rec, num_non_rec, child_pid);
+                ptrace(PTRACE_CONT, child_pid, NULL, NULL);
+            }
+            else
+                ptrace(PTRACE_CONT, child_pid, NULL, WSTOPSIG(wait_status));
+        }
+        else 
+            ptrace(PTRACE_CONT, child_pid, NULL, NULL);
+    }
 }
 
 int main(int argc, char* const argv[])
@@ -154,9 +184,7 @@ int main(int argc, char* const argv[])
     free(file_content);
 
     //check if symbol was found. otherwise, exit
-    if(addr == -1) return 1;
-
-    //check if the first 
+    if(addr == 0) return 1;
 
     // Launch the target program
     pid_t child_pid = run_target(argv + 3);
