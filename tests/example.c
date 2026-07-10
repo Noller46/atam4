@@ -136,44 +136,37 @@ typedef struct node{
 } node;
 
 typedef struct{
-    node *first, *last;
+    node *first;
 } CallStack;
 
-void init(CallStack *stack) {stack->first = NULL; stack->last = NULL;}
+void init(CallStack *stack) {stack->first = NULL;}
 bool isEmpty(CallStack *stack) {return stack->first == NULL;}
-void insert(CallStack *stack, pair p){
+void push(CallStack *stack, pair p){
     node *n = malloc(sizeof(node));
     n->p = p;
-    n->next = NULL;
-    if(isEmpty(stack)) {
-        stack->first = n;
-        stack->last = n;
-        return;
-    }
-    stack->last->next = n;
-    stack->last = n;
+    n->next = stack->first;
+    stack->first = n;
 }
-pair remove(CallStack *stack){
+pair pop(CallStack *stack){
     if(isEmpty(stack)){
         pair p = {-1};
         return p;
     }
     node *temp = stack->first;
     stack->first = temp->next;
-    if(isEmpty) stack->last = NULL;
     pair p = temp->p;
     free(temp);
     return p;
 }
 
 long first_instruct;
-void handle_break(int *num_rec, int *num_non_rec, int pid);
+void handle_break(int *num_rec, int *num_non_rec, int pid, unsigned long addr);
 void handle_enter(int *num_rec, int *num_non_rec, int pid);
-void handle_exit(int pid);
+void handle_exit(int *num_rec, int pid);
 
 void run_tracer(pid_t child_pid, unsigned long addr, int nr_params)
 {
-    int wait_status, num_rec, num_non_rec;
+    int wait_status, num_rec = 0, num_non_rec = 0;
     /*
     num_rec represents rcursive depth. for values > 0, num of recursive
     calls is (num_rec-1). there's also the first, nonrecursive call
@@ -183,9 +176,9 @@ void run_tracer(pid_t child_pid, unsigned long addr, int nr_params)
 
     // TODO: Implement tracing logic
     wait(&wait_status);
-    first_instruct = ptrace(PTRACE_PEEKTEXT, child_pid, addr, NULL);
+    first_instruct = ptrace(PTRACE_PEEKTEXT, child_pid, (void*)addr, (void*)0);
     long insert_first = (first_instruct & 0xFFFFFFFFFFFFFF00) | 0xCC;
-    ptrace(PTRACE_POKETEXT, child_pid, addr, insert_first);
+    ptrace(PTRACE_POKETEXT, child_pid, (void*)addr, (void*)insert_first);
 
     while(1){
         wait(&wait_status);
@@ -193,18 +186,34 @@ void run_tracer(pid_t child_pid, unsigned long addr, int nr_params)
             return;
         if(WIFSTOPPED(wait_status)){
             if(WSTOPSIG(wait_status) == SIGTRAP){
-                handle_break(num_rec, num_non_rec, child_pid);
-                ptrace(PTRACE_CONT, child_pid, NULL, NULL);
+                handle_break(&num_rec, &num_non_rec, child_pid, addr);
+                ptrace(PTRACE_CONT, child_pid, (void*)0, (void*)0);
             }
             else
-                ptrace(PTRACE_CONT, child_pid, NULL, WSTOPSIG(wait_status));
+                ptrace(PTRACE_CONT, child_pid, (void*)0, (void*)((long)WSTOPSIG(wait_status)));
         }
         else 
-            ptrace(PTRACE_CONT, child_pid, NULL, NULL);
+            ptrace(PTRACE_CONT, child_pid, (void*)0, (void*)0);
     }
 }
 
+void handle_break(int *num_rec, int *num_non_rec, int pid, unsigned long addr){
+    struct user_regs_struct regs;
+    ptrace(PTRACE_GETREGS, pid, (void*)0, &regs);
+    unsigned long curr_addr = regs.rip - 1;
+    if(curr_addr == addr){
+        //enter (the followed func was called)
+        handle_enter(num_rec, num_non_rec, pid);
+    }
+    else{
+        //exit
+        handle_exit(num_rec, pid);
+    }
+}
 
+void handle_enter(int *num_rec, int *num_non_rec, int pid){
+    
+}
 
 int main(int argc, char* const argv[])
 {
