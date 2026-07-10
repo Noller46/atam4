@@ -85,24 +85,16 @@ unsigned long parse_elf(const char* target_sym, void* file_contents)
 
     Elf64_Ehdr* ehdr = (Elf64_Ehdr*)file_contents;
 
- 
-
-
     Elf64_Shdr* sections = (Elf64_Shdr*)((char*)file_contents + ehdr->e_shoff);
 
     for (int i = 0; i < ehdr->e_shnum; i++) {
         Elf64_Shdr* shdr = &sections[i];
-
-
     }
 
     for (int i = 0; i < ehdr->e_shnum; i++) {
         Elf64_Shdr* shdr = &sections[i];
 
         if (shdr->sh_type == SHT_SYMTAB) {
-            
-
-
             Elf64_Sym* symtab = (Elf64_Sym*)((char*)file_contents + shdr->sh_offset);
             size_t num_symbols = shdr->sh_size / shdr->sh_entsize;
 
@@ -113,11 +105,18 @@ unsigned long parse_elf(const char* target_sym, void* file_contents)
                 Elf64_Sym* sym = &symtab[j];
 
                 if (strcmp(strtab + sym->st_name, target_sym) == 0) {
-                    printf("Address: 0x%lx\n", sym->st_value);
+                    printf("PRF:: symbol address is 0x%lx\n", sym->st_value);
+                    unsigned char *f_comm = 
+                        ((char*)(ehdr) + sections[sym->st_shndx].sh_offset + sym->st_value - sections[sym->st_value].sh_addr);
+                    if(*f_comm == 0x55) 
+                        printf("PRF:: This function starts by pushing rbp\n");
+                    return sym->st_value;
                 }
             }
         }
     }
+    printf("PRF:: symbol not found\n");
+    return -1;
 }
 
 /*
@@ -154,7 +153,10 @@ int main(int argc, char* const argv[])
     // Free the allocated memory
     free(file_content);
 
-    // TODO: check if symbol was found
+    //check if symbol was found. otherwise, exit
+    if(addr == -1) return 1;
+
+    //check if the first 
 
     // Launch the target program
     pid_t child_pid = run_target(argv + 3);
