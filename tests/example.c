@@ -158,13 +158,14 @@ int check(CallStack* stack, long addr) {
     return 0;
 
 }
-long get(CallStack* stack, long addr) {
+pair get(CallStack* stack, long addr) {
     node* curr = stack->first->next;
     while (curr != stack->last) {
-        if (curr->p.addr == addr) { return curr->p.instruct; }
+        if (curr->p.addr == addr) { return curr->p; }
         curr = curr->next;
     }
-    return 0;
+    pair p = { -1 };
+    return p;
 
 }
 
@@ -254,8 +255,14 @@ void handle_enter(int *num_rec, int *num_non_rec, int pid, int num){
     p.addr = ret_addr;
     p.instruct = ptrace(PTRACE_PEEKTEXT, pid, (void*)ret_addr, (void*)0);
     p.masked = (p.instruct & 0xFFFFFFFFFFFFFF00) | 0xCC;
-    //printf("saved instruction = %016lx\n", p.instruct);
-    push(&stack, p);
+    if (0/*check(&stack, ret_addr)*/) {
+        push(&stack, get(&stack, ret_addr));
+    }
+    else {
+        //printf("saved instruction = %016lx\n", p.instruct);
+        push(&stack, p);
+    }
+    
 
     //insert sigtrap to return
     long insert_first = (p.instruct & 0xFFFFFFFFFFFFFF00) | 0xCC;
