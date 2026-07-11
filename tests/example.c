@@ -129,6 +129,7 @@ unsigned long parse_elf(const char* target_sym, void* file_contents)
 typedef struct{
     long addr;
     long instruct;
+    long masked;
 } pair;
 
 typedef struct node{
@@ -138,14 +139,19 @@ typedef struct node{
 
 typedef struct{
     node *first;
+    node* last;
 } CallStack;
 
-void init(CallStack *stack) {stack->first = NULL;}
-bool isEmpty(CallStack *stack) {return stack->first == NULL;}
+void init(CallStack *stack) {
+    stack->first = malloc(sizeof(node));
+    stack->last = NULL;
+}
 
-/*int check(CallStack* stack, long addr) {
-    node *curr = stack->first;
-    while (curr->p.addr != NULL) {
+bool isEmpty(CallStack *stack) {return stack->first->next == stack->last;}
+
+int check(CallStack* stack, long addr) {
+    node *curr = stack->first->next;
+    while (curr != stack->first) {
         if (curr->p.addr == addr) { return 1;}
         curr = curr->next;
     }
@@ -153,18 +159,18 @@ bool isEmpty(CallStack *stack) {return stack->first == NULL;}
 
 }
 long get(CallStack* stack, long addr) {
-    node* curr = stack->first;
-    while (curr->p.addr != NULL) {
+    node* curr = stack->first->next;
+    while (curr != stack->first) {
         if (curr->p.addr == addr) { return curr->p.instruct; }
         curr = curr->next;
     }
     return 0;
 
-}*/
+}
 
 void push(CallStack *stack, pair p){
     node *n = malloc(sizeof(node));
-    n->p = p;
+    stack->first->p = p;
     n->next = stack->first;
     stack->first = n;
 }
@@ -175,7 +181,7 @@ pair pop(CallStack *stack){
     }
     node *temp = stack->first;
     stack->first = temp->next;
-    pair p = temp->p;
+    pair p = stack->first->p;
     free(temp);
     return p;
 }
@@ -247,6 +253,7 @@ void handle_enter(int *num_rec, int *num_non_rec, int pid, int num){
     pair p;
     p.addr = ret_addr;
     p.instruct = ptrace(PTRACE_PEEKTEXT, pid, (void*)ret_addr, (void*)0);
+    p.masked = (p.instruct & 0xFFFFFFFFFFFFFF00) | 0xCC;
     //printf("saved instruction = %016lx\n", p.instruct);
     push(&stack, p);
 
@@ -269,6 +276,9 @@ void handle_enter(int *num_rec, int *num_non_rec, int pid, int num){
 void handle_exit(int *num_rec, int pid){
     struct user_regs_struct regs;
     ptrace(PTRACE_GETREGS, pid, NULL, &regs);
+
+    long long unsigned output = regs.rax;
+
     pair curr = pop(&stack);
 
     // update the rip
@@ -277,14 +287,12 @@ void handle_exit(int *num_rec, int pid){
 
     // restore the next instruction
     ptrace(PTRACE_POKETEXT, pid, (void*)curr.addr, (void*)curr.instruct);
-
+    
     (*num_rec)--;
-    if((*num_rec) > 0){
-        //
+    if(!(*num_rec) > 0){
+        printf("PRF::   call to function returned with %llu\n", output);
     }
-    else{
-        printf("PRF::   call to function returned with %llu\n", regs.rax);
-    }
+    
     
 
 }
