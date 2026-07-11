@@ -181,6 +181,7 @@ void run_tracer(pid_t child_pid, unsigned long addr, int nr_params)
     first_instruct = ptrace(PTRACE_PEEKTEXT, child_pid, (void*)addr, (void*)0);
     long insert_first = (first_instruct & 0xFFFFFFFFFFFFFF00) | 0xCC;
     ptrace(PTRACE_POKETEXT, child_pid, (void*)addr, (void*)insert_first);
+    ptrace(PTRACE_CONT, child_pid, (void*)0, (void*)0);
 
     while(1){
         wait(&wait_status);
@@ -242,8 +243,6 @@ void handle_enter(int *num_rec, int *num_non_rec, int pid, int num){
     ptrace(PTRACE_POKETEXT, pid, (void*)regs.rip, (void*)first_insert);
 }
 
-
-
 void print_enter(bool rec, struct user_regs_struct *regs, int *num_non_rec, int num){
     if(num == 0){
         if(rec)
@@ -252,7 +251,7 @@ void print_enter(bool rec, struct user_regs_struct *regs, int *num_non_rec, int 
             printf("PRF:: run #%d called with ():\n", *num_non_rec);
         return;
     }
-    unsigned long int arr[6];
+    unsigned long long int arr[6];
     arr[0] = regs->rdi;
     arr[1] = regs->rsi;
     arr[2] = regs->rdx;

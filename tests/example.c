@@ -181,6 +181,7 @@ void run_tracer(pid_t child_pid, unsigned long addr, int nr_params)
     first_instruct = ptrace(PTRACE_PEEKTEXT, child_pid, (void*)addr, (void*)0);
     long insert_first = (first_instruct & 0xFFFFFFFFFFFFFF00) | 0xCC;
     ptrace(PTRACE_POKETEXT, child_pid, (void*)addr, (void*)insert_first);
+    ptrace(PTRACE_CONT, child_pid, (void*)0, (void*)0);
 
     while(1){
         wait(&wait_status);
@@ -241,13 +242,6 @@ void handle_enter(int *num_rec, int *num_non_rec, int pid, int num){
     long first_insert = (first_instruct & 0xFFFFFFFFFFFFFF00) | 0xCC;
     ptrace(PTRACE_POKETEXT, pid, (void*)regs.rip, (void*)first_insert);
 }
-
-
-void handle_exit(int *num_rec, int pid){
-    
-}
-
-
 
 void print_enter(bool rec, struct user_regs_struct *regs, int *num_non_rec, int num){
     if(num == 0){
