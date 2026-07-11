@@ -1,0 +1,8 @@
+PRF:: symbol address is 0x402F45
+PRF:: This function starts by pushing rbp
+PRF:: run #1 called with (3, 4):
+PRF::   call to function returned with 7
+PRF:: run #2 called with (0, 0):
+PRF::   call to function returned with 0
+PRF:: run #3 called with (42, 42):
+PRF::   call to function returned with 84

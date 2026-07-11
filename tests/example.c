@@ -15,6 +15,7 @@
 #include <syscall.h>
 #include <unistd.h>
 #include <signal.h>
+#include <ctype.h>
 
 /*
  * Fork a child process and set it up for tracing.
@@ -106,7 +107,7 @@ unsigned long parse_elf(const char* target_sym, void* file_contents)
                 Elf64_Sym* sym = &symtab[j];
 
                 if (strcmp(strtab + sym->st_name, target_sym) == 0) {
-                    printf("PRF:: symbol address is 0x%lx\n", sym->st_value); //part 1 print
+                    printf("PRF:: symbol address is 0x%lX\n", sym->st_value); //part 1 print
                     unsigned char *f_comm = 
                         ((unsigned char*)(ehdr) + sections[sym->st_shndx].sh_offset 
                         + sym->st_value - sections[sym->st_shndx].sh_addr);
@@ -141,6 +142,26 @@ typedef struct{
 
 void init(CallStack *stack) {stack->first = NULL;}
 bool isEmpty(CallStack *stack) {return stack->first == NULL;}
+
+/*int check(CallStack* stack, long addr) {
+    node *curr = stack->first;
+    while (curr->p.addr != NULL) {
+        if (curr->p.addr == addr) { return 1;}
+        curr = curr->next;
+    }
+    return 0;
+
+}
+long get(CallStack* stack, long addr) {
+    node* curr = stack->first;
+    while (curr->p.addr != NULL) {
+        if (curr->p.addr == addr) { return curr->p.instruct; }
+        curr = curr->next;
+    }
+    return 0;
+
+}*/
+
 void push(CallStack *stack, pair p){
     node *n = malloc(sizeof(node));
     n->p = p;
@@ -168,7 +189,7 @@ void print_enter(bool rec, struct user_regs_struct *regs, int *num_non_rec, int 
 
 void run_tracer(pid_t child_pid, unsigned long addr, int nr_params)
 {
-    int wait_status, num_rec = 0, num_non_rec = 0;
+    int wait_status, num_rec = 0, num_non_rec = 1;
     /*
     num_rec represents rcursive depth. for values > 0, num of recursive
     calls is (num_rec-1). there's also the first, nonrecursive call
@@ -218,6 +239,7 @@ void handle_enter(int *num_rec, int *num_non_rec, int pid, int num){
     struct user_regs_struct regs;
     ptrace(PTRACE_GETREGS, pid, NULL, &regs);
     print_enter(*num_rec, &regs, num_non_rec, num);
+    if((*num_rec)<1)(*num_non_rec)++;
     (*num_rec)++;
     long ret_addr = ptrace(PTRACE_PEEKDATA, pid, (void*)regs.rsp, (void*)0);
 
@@ -225,6 +247,7 @@ void handle_enter(int *num_rec, int *num_non_rec, int pid, int num){
     pair p;
     p.addr = ret_addr;
     p.instruct = ptrace(PTRACE_PEEKTEXT, pid, (void*)ret_addr, (void*)0);
+    //printf("saved instruction = %016lx\n", p.instruct);
     push(&stack, p);
 
     //insert sigtrap to return
@@ -243,10 +266,40 @@ void handle_enter(int *num_rec, int *num_non_rec, int pid, int num){
     ptrace(PTRACE_POKETEXT, pid, (void*)regs.rip, (void*)first_insert);
 }
 
+void handle_exit(int *num_rec, int pid){
+    struct user_regs_struct regs;
+    ptrace(PTRACE_GETREGS, pid, NULL, &regs);
+    pair curr = pop(&stack);
+
+    (*num_rec)--;
+    if((*num_rec) > 0){
+        //
+    }
+    else{
+        printf("PRF::   call to function returned with %llu\n", (long long)regs.rax);
+    }
+
+    // update the rip
+    regs.rip--;
+    ptrace(PTRACE_SETREGS, pid, NULL, &regs);
+
+    // restore the next instruction
+    ptrace(PTRACE_POKETEXT, pid, (void*)curr.addr, (void*)curr.instruct);
+
+    // cuntinue
+    //ptrace(PTRACE_CONT, pid, NULL, NULL);
+    //waitpid(pid, NULL, 0);
+
+    /*// retunr trap
+    long trap = (curr.instruct & 0xFFFFFFFFFFFFFF00UL) | curr.instruct;
+    ptrace(PTRACE_POKETEXT, pid,(void*)curr.addr, (void*)trap);*/
+
+}
+
 void print_enter(bool rec, struct user_regs_struct *regs, int *num_non_rec, int num){
     if(num == 0){
         if(rec)
-            printf("PRF:: entered recursive call with ()\n");
+            printf("PRF::     entered recursive call with ()\n");
         else
             printf("PRF:: run #%d called with ():\n", *num_non_rec);
         return;
@@ -260,14 +313,14 @@ void print_enter(bool rec, struct user_regs_struct *regs, int *num_non_rec, int 
     arr[5] = regs->r9;
 
     if(rec)
-        printf("PRF:: entered recursive call with (");
+        printf("PRF::     entered recursive call with (");
     else
         printf("PRF:: run #%d called with (", *num_non_rec);
     for(int i = 0; i < num; i++){
         if(i != 0) printf(", ");
         printf("%llu", arr[i]);
     }
-    printf(")\n");
+    printf("):\n");
 }
 
 int main(int argc, char* const argv[])
