@@ -1,0 +1,3 @@
+Place all your .c (and .h, if you have) files in the tests folder (./tests).
+Do "chmod +x run_tests.sh"
+Run "./run_tests.sh"

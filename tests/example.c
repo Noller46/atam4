@@ -271,14 +271,6 @@ void handle_exit(int *num_rec, int pid){
     ptrace(PTRACE_GETREGS, pid, NULL, &regs);
     pair curr = pop(&stack);
 
-    (*num_rec)--;
-    if((*num_rec) > 0){
-        //
-    }
-    else{
-        printf("PRF::   call to function returned with %llu\n", (long long)regs.rax);
-    }
-
     // update the rip
     regs.rip--;
     ptrace(PTRACE_SETREGS, pid, NULL, &regs);
@@ -286,13 +278,14 @@ void handle_exit(int *num_rec, int pid){
     // restore the next instruction
     ptrace(PTRACE_POKETEXT, pid, (void*)curr.addr, (void*)curr.instruct);
 
-    // cuntinue
-    //ptrace(PTRACE_CONT, pid, NULL, NULL);
-    //waitpid(pid, NULL, 0);
-
-    /*// retunr trap
-    long trap = (curr.instruct & 0xFFFFFFFFFFFFFF00UL) | curr.instruct;
-    ptrace(PTRACE_POKETEXT, pid,(void*)curr.addr, (void*)trap);*/
+    (*num_rec)--;
+    if((*num_rec) > 0){
+        //
+    }
+    else{
+        printf("PRF::   call to function returned with %llu\n", regs.rax);
+    }
+    
 
 }
 
@@ -320,7 +313,9 @@ void print_enter(bool rec, struct user_regs_struct *regs, int *num_non_rec, int 
         if(i != 0) printf(", ");
         printf("%llu", arr[i]);
     }
-    printf("):\n");
+    if (rec) printf(")\n");
+    else printf("):\n");
+    
 }
 
 int main(int argc, char* const argv[])
