@@ -163,7 +163,7 @@ pair get(CallStack* stack, long addr) {
         pair p = { -1 };
         return p;
     }
-    node* curr = stack->first->next;
+    node* curr = stack->first;
     while (curr != NULL) {
         if (curr->p.addr == addr) { return curr->p; }
         curr = curr->next;
@@ -236,13 +236,19 @@ void handle_break(int *num_rec, int *num_non_rec, int pid, unsigned long addr, i
     struct user_regs_struct regs;
     ptrace(PTRACE_GETREGS, pid, (void*)0, &regs);
     unsigned long curr_addr = regs.rip - 1;
+    //printf("curr_addr == addr : %d\n", curr_addr == addr);
     if(curr_addr == addr){
         //enter (the followed func was called)
         handle_enter(num_rec, num_non_rec, pid, num);
     }
     else{
         //exit
-        handle_exit(num_rec, pid);
+        if (!isEmpty(&stack) && curr_addr == stack.first->p.addr) {
+            handle_exit(num_rec, pid);
+        }
+        else {
+            // It's a stray system/library trap. Do nothing and let the child pass it.
+        }
     }
 }
 
@@ -259,15 +265,9 @@ void handle_enter(int *num_rec, int *num_non_rec, int pid, int num){
     p.addr = ret_addr;
     p.instruct = ptrace(PTRACE_PEEKTEXT, pid, (void*)ret_addr, (void*)0);
     p.masked = (p.instruct & 0xFFFFFFFFFFFFFF00) | 0xCC;
-    if (check(&stack, ret_addr)) {
-        printf("inside one\n");
+    if (check(&stack, ret_addr))
         p = get(&stack, ret_addr);
-        push(&stack, p);
-    }
-    else {
-        //printf("saved instruction = %016lx\n", p.instruct);
-        push(&stack, p);
-    }
+    push(&stack, p);
     
 
     //insert sigtrap to return
@@ -290,7 +290,7 @@ void handle_exit(int *num_rec, int pid){
     struct user_regs_struct regs;
     ptrace(PTRACE_GETREGS, pid, NULL, &regs);
 
-    long long unsigned output = regs.rax;
+    //int output = (int)regs.rax;
 
     pair curr = pop(&stack);
 
@@ -302,10 +302,19 @@ void handle_exit(int *num_rec, int pid){
     ptrace(PTRACE_POKETEXT, pid, (void*)curr.addr, (void*)curr.instruct);
     
     (*num_rec)--;
-    if(!(*num_rec) > 0){
-        printf("PRF::   call to function returned with %llu\n", output);
+    if(!(*num_rec)){
+        printf("PRF::   call to function returned with %d\n", (int)regs.rax);
     }
 
+    if (check(&stack, curr.addr)) {
+        //ptrace(PTRACE_POKETEXT, pid, (void*)curr.addr, (void*)curr.masked);
+
+        ptrace(PTRACE_SINGLESTEP, pid, (void*)0, (void*)0);
+        waitpid(pid, NULL, 0); // Wait for the single-step to complete
+
+        // Now that the original instruction has safely run, re-insert the breakpoint for outer frames
+        ptrace(PTRACE_POKETEXT, pid, (void*)curr.addr, (void*)curr.masked);
+    }
     
     
 
@@ -319,13 +328,13 @@ void print_enter(bool rec, struct user_regs_struct *regs, int *num_non_rec, int 
             printf("PRF:: run #%d called with ():\n", *num_non_rec);
         return;
     }
-    unsigned long long int arr[6];
-    arr[0] = regs->rdi;
-    arr[1] = regs->rsi;
-    arr[2] = regs->rdx;
-    arr[3] = regs->rcx;
-    arr[4] = regs->r8;
-    arr[5] = regs->r9;
+    int arr[6];
+    arr[0] = (int)regs->rdi;
+    arr[1] = (int)regs->rsi;
+    arr[2] = (int)regs->rdx;
+    arr[3] = (int)regs->rcx;
+    arr[4] = (int)regs->r8;
+    arr[5] = (int)regs->r9;
 
     if(rec)
         printf("PRF::     entered recursive call with (");
@@ -333,7 +342,7 @@ void print_enter(bool rec, struct user_regs_struct *regs, int *num_non_rec, int 
         printf("PRF:: run #%d called with (", *num_non_rec);
     for(int i = 0; i < num; i++){
         if(i != 0) printf(", ");
-        printf("%llu", arr[i]);
+        printf("%d", arr[i]);
     }
     if (rec) printf(")\n");
     else printf("):\n");
