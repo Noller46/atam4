@@ -151,7 +151,7 @@ bool isEmpty(CallStack *stack) {return stack->first->next == stack->last;}
 
 int check(CallStack* stack, long addr) {
     node *curr = stack->first->next;
-    while (curr != stack->first) {
+    while (curr != stack->last) {
         if (curr->p.addr == addr) { return 1;}
         curr = curr->next;
     }
@@ -160,7 +160,7 @@ int check(CallStack* stack, long addr) {
 }
 long get(CallStack* stack, long addr) {
     node* curr = stack->first->next;
-    while (curr != stack->first) {
+    while (curr != stack->last) {
         if (curr->p.addr == addr) { return curr->p.instruct; }
         curr = curr->next;
     }
