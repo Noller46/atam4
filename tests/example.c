@@ -143,15 +143,15 @@ typedef struct{
 } CallStack;
 
 void init(CallStack *stack) {
-    stack->first = malloc(sizeof(node));
-    stack->last = NULL;
+    stack->first = NULL;
 }
 
-bool isEmpty(CallStack *stack) {return stack->first->next == stack->last;}
+bool isEmpty(CallStack *stack) {return stack->first == NULL;}
 
 int check(CallStack* stack, long addr) {
-    node *curr = stack->first->next;
-    while (curr != stack->last) {
+    if (isEmpty(stack)) return 0;
+    node *curr = stack->first;
+    while (curr!= NULL) {
         if (curr->p.addr == addr) { return 1;}
         curr = curr->next;
     }
@@ -159,8 +159,12 @@ int check(CallStack* stack, long addr) {
 
 }
 pair get(CallStack* stack, long addr) {
+    if (isEmpty(stack)) {
+        pair p = { -1 };
+        return p;
+    }
     node* curr = stack->first->next;
-    while (curr != stack->last) {
+    while (curr != NULL) {
         if (curr->p.addr == addr) { return curr->p; }
         curr = curr->next;
     }
@@ -171,7 +175,7 @@ pair get(CallStack* stack, long addr) {
 
 void push(CallStack *stack, pair p){
     node *n = malloc(sizeof(node));
-    stack->first->p = p;
+    n->p = p;
     n->next = stack->first;
     stack->first = n;
 }
@@ -182,7 +186,7 @@ pair pop(CallStack *stack){
     }
     node *temp = stack->first;
     stack->first = temp->next;
-    pair p = stack->first->p;
+    pair p = temp->p;
     free(temp);
     return p;
 }
@@ -256,6 +260,7 @@ void handle_enter(int *num_rec, int *num_non_rec, int pid, int num){
     p.instruct = ptrace(PTRACE_PEEKTEXT, pid, (void*)ret_addr, (void*)0);
     p.masked = (p.instruct & 0xFFFFFFFFFFFFFF00) | 0xCC;
     if (check(&stack, ret_addr)) {
+        printf("inside one\n");
         p = get(&stack, ret_addr);
         push(&stack, p);
     }

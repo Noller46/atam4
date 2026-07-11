@@ -10,14 +10,14 @@ if [ -f "prf" ]; then
 		echo "Test 1: FAIL"
 	fi
 
-	timeout 20s ./prf rec_foo 1 program2.out > lookout.txt
+	timeout 20s ./prf rec_foo 1 program2.out > studentout.txt
 	if [ $? -eq 0 ] && diff "out2.txt" studentout.txt >/dev/null 2>&1; then
 		echo "Test 2: PASS"
 	else
 		echo "Test 2: FAIL"
 	fi
 
-	timeout 20s ./prf rec_bar 1 program3.out > studentout.txt
+	timeout 20s ./prf rec_bar 1 program3.out > lookout.txt
 	if [ $? -eq 0 ] && diff "out3.txt" studentout.txt >/dev/null 2>&1; then
 		echo "Test 3: PASS"
 	else
