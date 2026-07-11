@@ -256,7 +256,8 @@ void handle_enter(int *num_rec, int *num_non_rec, int pid, int num){
     p.instruct = ptrace(PTRACE_PEEKTEXT, pid, (void*)ret_addr, (void*)0);
     p.masked = (p.instruct & 0xFFFFFFFFFFFFFF00) | 0xCC;
     if (0/*check(&stack, ret_addr)*/) {
-        push(&stack, get(&stack, ret_addr));
+        p = get(&stack, ret_addr);
+        push(&stack, p);
     }
     else {
         //printf("saved instruction = %016lx\n", p.instruct);
