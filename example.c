@@ -223,7 +223,7 @@ void handle_enter(int *num_rec, int *num_non_rec, int pid, int num){
     //save instruction
     pair p;
     p.addr = ret_addr;
-    p.instruct = פtrace(PTRACE_PEEKTEXT, pid, (void*)ret_addr, (void*)0);
+    p.instruct = ptrace(PTRACE_PEEKTEXT, pid, (void*)ret_addr, (void*)0);
     push(&stack, p);
 
     //insert sigtrap to return

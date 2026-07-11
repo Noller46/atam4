@@ -223,7 +223,7 @@ void handle_enter(int *num_rec, int *num_non_rec, int pid, int num){
     //save instruction
     pair p;
     p.addr = ret_addr;
-    p.instruct = פtrace(PTRACE_PEEKTEXT, pid, (void*)ret_addr, (void*)0);
+    p.instruct = ptrace(PTRACE_PEEKTEXT, pid, (void*)ret_addr, (void*)0);
     push(&stack, p);
 
     //insert sigtrap to return
@@ -243,6 +243,11 @@ void handle_enter(int *num_rec, int *num_non_rec, int pid, int num){
 }
 
 
+void handle_exit(int *num_rec, int pid){
+    
+}
+
+
 
 void print_enter(bool rec, struct user_regs_struct *regs, int *num_non_rec, int num){
     if(num == 0){
@@ -252,7 +257,7 @@ void print_enter(bool rec, struct user_regs_struct *regs, int *num_non_rec, int 
             printf("PRF:: run #%d called with ():\n", *num_non_rec);
         return;
     }
-    unsigned long int arr[6];
+    unsigned long long int arr[6];
     arr[0] = regs->rdi;
     arr[1] = regs->rsi;
     arr[2] = regs->rdx;
